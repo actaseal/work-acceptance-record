@@ -58,12 +58,22 @@ work-acceptance record by digest, so "the checker found X" and "the counterparty
 | 26-key-small-order.json | neutral-point key; R = neutral, S = 0 verifies for any message under the bare equation: `KEY_REJECTED` |
 | 27-key-non-canonical-encoding.json | non-canonical key encoding (y = p + 1): `KEY_REJECTED` |
 | 28-key-file-with-unrelated-bad-entry.json | an unrelated small-order entry listed before the valid signing key: same outcome as 01 (case from robertolocatelli81-dev) |
+| 29-criteria-token-accuracy-flips-commitment.json | the criteria token is 30 s before the check but states an accuracy of 60 s: `CRITERIA_COMMITTED_AFTER_CHECK` (case from robertolocatelli81-dev) |
+| 30-criteria-token-accuracy-millis-still-before.json | control for 29: the same times with an accuracy of 500 ms (the millis field): no problems |
 
 Each file contains its inputs and an `expected` object with the outcome an independent verifier should reproduce. The keys in the vectors are test keys:
 never trust them. The timestamp tokens in the vectors are imprint-and-time fixtures, not valid RFC 3161 tokens: their SignedData has no SignerInfo, so OpenSSL and other CMS parsers that require a signer refuse them. They test imprint and time handling only.
 
+## Reference verifier (`verifier/`)
+
+`verifier/war_verify.py` runs the procedure above using only the Python standard library (Ed25519, JCS and the RFC 3161 scan are implemented in the file), with no network access:
+
+    python -I verifier/war_verify.py vectors/*.json
+
+It prints `AGREE` or `DIFF` per vector and exits non-zero on any disagreement; `--outcome FILE` prints the computed outcome object. It checks token imprints, times and accuracy, not the time-stamp authority's signature (step 9). It is offered as a reference for comparison; clean-room verifiers that disagree with it, or with a vector's `expected` object, are the useful result.
+
 ## Changelog
-**Profile 1.3 (2026-10-18; schema identifier unchanged).** Resolves the questions from clean-room verifiers by Tetsurohhori and robertolocatelli81-dev and a second run by babyblueviper1 (x402-foundation/tsc#4): step 2 names the signed `receipt.key_id` and adds the canonical, prime-order key rule (`KEY_REJECTED`); step 5's reference time is the earlier of `issued_utc` and a covering token's genTime; imprints must be SHA-256 by OID; `accuracy` widens comparisons, `ordering` ignored; a token over other bytes falls back with `CRITERIA_COMMITMENT_UNVERIFIED`; `PRODUCER_UNDECLARED` follows the parties block; step 1 refusal shape; authority signature reported separately; vectors 12-27 added (12b replaces 12; Tetsurohhori's SHA-1 vector superseded by 23). Clarified 2026-10-18: the key rule applies to the named signing key only; vector 28 added; outcomes for 01-27 unchanged.
+**Profile 1.3 (2026-10-18; schema identifier unchanged).** Resolves the questions from clean-room verifiers by Tetsurohhori and robertolocatelli81-dev and a second run by babyblueviper1 (x402-foundation/tsc#4): step 2 names the signed `receipt.key_id` and adds the canonical, prime-order key rule (`KEY_REJECTED`); step 5's reference time is the earlier of `issued_utc` and a covering token's genTime; imprints must be SHA-256 by OID; `accuracy` widens comparisons, `ordering` ignored; a token over other bytes falls back with `CRITERIA_COMMITMENT_UNVERIFIED`; `PRODUCER_UNDECLARED` follows the parties block; step 1 refusal shape; authority signature reported separately; vectors 12-27 added (12b replaces 12; Tetsurohhori's SHA-1 vector superseded by 23). Clarified 2026-10-18: the key rule applies to the named signing key only; vector 28 added; outcomes for 01-27 unchanged. Added 2026-10-19: vectors 29-30, the first whose tokens state an `accuracy`; the reference verifier in `verifier/`.
 **Profile 1.2.1 (2026-10-17; schema identifier unchanged).** Resolves ambiguities found by an independent clean-room review (babyblueviper1): `CRITERIA_COMMITTED_AFTER_CHECK` is a problem; the token over `criteria.sha256` is authoritative for commitment time (`CRITERIA_TIME_MISMATCH`, fallback with `CRITERIA_COMMITMENT_UNVERIFIED`); verdict rule completed (required `fail` wins, `VERDICT_MISMATCH`); reference time uses the record's token only when it covers the record; vectors 06-11 added.
 **Profile 1.2.** First draft, vectors 01-05.
 
@@ -71,4 +81,4 @@ never trust them. The timestamp tokens in the vectors are imprint-and-time fixtu
 Draft, offered for the evidence-record discussion in x402-foundation/tsc#4 and referenced by ACP SEP #303 (Section 7.4a). Independent clean-room
 implementations are welcome; please report any disagreement with a vector's `expected` outcome as an issue.
 
-Licence: text CC BY 4.0; vectors CC0 1.0.
+Licence: text CC BY 4.0; vectors and verifier code CC0 1.0.
