@@ -632,6 +632,7 @@ class Cert:
         tbs, sigalg, sigval = c.children()
         self.tbs_raw = tbs.raw
         self.sigalg_oid = oid_str(sigalg.children()[0])
+        self.sigalg_params = (sigalg.children() + [None])[1]
         self.sig = sigval.val[1:]  # drop unused-bits byte
         f = tbs.children()
         i = 0
@@ -723,6 +724,70 @@ def rsa_pkcs1_verify(cert, hash_oid, signed, sig):
         if pad >= 8 and em == b"\x00\x01" + b"\xff" * pad + b"\x00" + di:
             return
     raise Failed("RSA PKCS#1 v1.5 signature does not verify")
+
+
+OID_MGF1 = "1.2.840.113549.1.1.8"
+
+
+def pss_params(node):
+    """RSASSA-PSS-params (RFC 8017 A.2.3) -> (hash_oid, salt_len). MGF1 with the same hash and trailerField 1 only."""
+    h, mgf_h, salt, trailer = "1.3.14.3.2.26", "1.3.14.3.2.26", 20, 1  # ASN.1 defaults
+    for f in (node.children() if node is not None and node.tag == 0x30 else []):
+        inner = parse_one(f.val)
+        if f.tag == 0xA0:
+            h = oid_str(inner.children()[0])
+        elif f.tag == 0xA1:
+            k = inner.children()
+            if oid_str(k[0]) != OID_MGF1:
+                raise Unsupported("RSASSA-PSS mask generation %s not supported" % oid_str(k[0]))
+            mgf_h = oid_str(k[1].children()[0])
+        elif f.tag == 0xA2:
+            salt = uint_val(inner)
+        elif f.tag == 0xA3:
+            trailer = uint_val(inner)
+    if h not in HASH_OIDS:
+        raise Unsupported("hash algorithm %s not supported" % h)
+    if mgf_h != h:
+        raise Unsupported("RSASSA-PSS with an MGF1 hash different from the message hash")
+    if trailer != 1:
+        raise Unsupported("RSASSA-PSS trailerField %d" % trailer)
+    return h, salt
+
+
+def rsa_pss_verify(cert, hash_oid, salt_len, signed, sig):
+    """EMSA-PSS-VERIFY (RFC 8017 9.1.2) with MGF1 over the same hash."""
+    if cert.rsa is None:
+        raise Failed("issuer/signer key type %s does not match an RSA signature algorithm" % cert.key_oid)
+    n, e = cert.rsa
+    k = (n.bit_length() + 7) // 8
+    if len(sig) != k:
+        raise Failed("signature length does not match RSA modulus")
+    hfn = HASH_OIDS[hash_oid][1]
+    h_len = hfn().digest_size
+    em_bits = n.bit_length() - 1
+    em_len = (em_bits + 7) // 8
+    m = pow(int.from_bytes(sig, "big"), e, n)
+    if m >= 1 << (8 * em_len):
+        raise Failed("RSASSA-PSS signature does not verify")
+    em = m.to_bytes(em_len, "big")
+    if em_len < h_len + salt_len + 2 or em[-1] != 0xBC:
+        raise Failed("RSASSA-PSS signature does not verify")
+    masked, hh = em[: em_len - h_len - 1], em[em_len - h_len - 1 : -1]
+    top = 8 * em_len - em_bits
+    if masked[0] >> (8 - top) if top else 0:
+        raise Failed("RSASSA-PSS signature does not verify")
+    mask, c = b"", 0
+    while len(mask) < len(masked):
+        mask += hfn(hh + c.to_bytes(4, "big")).digest()
+        c += 1
+    db = bytearray(x ^ y for x, y in zip(masked, mask))
+    db[0] &= 0xFF >> top
+    ps = em_len - h_len - salt_len - 2
+    if any(db[:ps]) or db[ps] != 0x01:
+        raise Failed("RSASSA-PSS signature does not verify")
+    salt = bytes(db[len(db) - salt_len :]) if salt_len else b""
+    if hfn(b"\x00" * 8 + hfn(signed).digest() + salt).digest() != hh:
+        raise Failed("RSASSA-PSS signature does not verify")
 
 
 def _oid_der(s):
@@ -826,10 +891,11 @@ def ecdsa_verify(cert, hash_oid, signed, sig):
         raise Failed("ECDSA signature does not verify")
 
 
-def verify_sig(cert, sig_oid, digest_oid, signed, sig):
+def verify_sig(cert, sig_oid, digest_oid, signed, sig, params=None):
     """Verify sig by cert's public key. Raises Failed / Unsupported."""
     if sig_oid == OID_PSS:
-        raise Unsupported("RSASSA-PSS (%s) not supported" % sig_oid)
+        h, salt = pss_params(params)
+        return rsa_pss_verify(cert, h, salt, signed, sig)
     if sig_oid in RSA_SIG_OIDS:
         h = RSA_SIG_OIDS[sig_oid] or digest_oid
         if h not in HASH_OIDS:
@@ -841,7 +907,7 @@ def verify_sig(cert, sig_oid, digest_oid, signed, sig):
             raise Unsupported("hash algorithm %s not supported" % h)
         return ecdsa_verify(cert, h, signed, sig)
     raise Unsupported(
-        "signature algorithm %s not supported (RSA PKCS#1 v1.5 and ECDSA P-256/P-384 only)"
+        "signature algorithm %s not supported (RSA PKCS#1 v1.5, RSASSA-PSS and ECDSA P-256/P-384 only)"
         % sig_oid
     )
 
@@ -866,7 +932,7 @@ def build_chain(signer, pool, roots, gen_dt):
         nxt = None
         for cand in cands:
             try:
-                verify_sig(cand, cur.sigalg_oid, None, cur.tbs_raw, cur.sig)
+                verify_sig(cand, cur.sigalg_oid, None, cur.tbs_raw, cur.sig, cur.sigalg_params)
                 nxt = cand
                 break
             except Failed as e:
@@ -1012,6 +1078,7 @@ def verify_tsa_signature(tsr, roots):
             attrs = si[idx]
             idx += 1
         sig_oid = oid_str(si[idx].children()[0])
+        sig_params = (si[idx].children() + [None])[1]
         signature = si[idx + 1].val
 
         notes = ""
@@ -1075,7 +1142,7 @@ def verify_tsa_signature(tsr, roots):
             )
         signer_name = signer.cn
 
-        verify_sig(signer, sig_oid, digest_oid, signed, signature)
+        verify_sig(signer, sig_oid, digest_oid, signed, signature, sig_params)
         _check_ess_binding(attrs, signer)
 
         if signer.eku is None or OID_TIMESTAMPING not in signer.eku:

@@ -1,0 +1,134 @@
+{
+ "contributed_by": "Trilatic (CC0)",
+ "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; see verifier-py/tools/make_synthetic_tsa.py), with the test root as the only anchor. No record token. The TSA key is ECDSA P-256 (ecdsa-with-SHA256).",
+ "expected": {
+  "criteria_committed_before_check": "yes",
+  "criteria_hash": "match",
+  "independence": "independent",
+  "problem_codes": [],
+  "receipt_timestamp": "none",
+  "signature_valid": true,
+  "tsa_signature": {
+   "criteria": "verified"
+  },
+  "verdict_recomputed": "pass",
+  "verdict_stated": "pass",
+  "warning_codes": []
+ },
+ "inputs": {
+  "criteria_file_base64": "eyJjcml0ZXJpYSI6W3siaWQiOiJjMSIsInJlcXVpcmVkIjp0cnVlLCJyZXF1aXJlbWVudCI6IlRoZSBmaXJzdCByZXF1aXJlbWVudC4iLCJ0aXRsZSI6IkZpcnN0IHJlcXVpcmVkIGNyaXRlcmlvbiJ9LHsiaWQiOiJjMiIsInJlcXVpcmVkIjp0cnVlLCJyZXF1aXJlbWVudCI6IlRoZSBzZWNvbmQgcmVxdWlyZW1lbnQuIiwidGl0bGUiOiJTZWNvbmQgcmVxdWlyZWQgY3JpdGVyaW9uIn0seyJpZCI6ImMzIiwicmVxdWlyZWQiOmZhbHNlLCJyZXF1aXJlbWVudCI6IkFuIG9wdGlvbmFsIHJlcXVpcmVtZW50LiIsInRpdGxlIjoiT3B0aW9uYWwgY3JpdGVyaW9uIn1dLCJjcml0ZXJpYV9zZXQiOiJleGFtcGxlLWNyaXRlcmlhIiwicmVzdWx0X3ZvY2FidWxhcnkiOlsicGFzcyIsImZhaWwiLCJub3QtZXZhbHVhdGVkIiwiZXJyb3IiXSwidGl0bGUiOiJFeGFtcGxlIGNyaXRlcmlhIGZvciB0ZXN0IHZlY3RvcnMiLCJ2ZXJzaW9uIjoiMSJ9",
+  "criteria_tsr_base64": "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",
+  "keys": {
+   "issuer": "Example Checker (test vectors)",
+   "keys": [
+    {
+     "alg": "Ed25519",
+     "key_id": "spec-test-2f2dfa2f",
+     "public_key_base64": "IG8NU3Wa4RNk++CwdHYLlfOxAtwRl2hz0hJKfLgZyJk=",
+     "status": "test"
+    }
+   ]
+  },
+  "receipt": {
+   "receipt": {
+    "canonicalization": "JCS-RFC8785",
+    "client_ref": "test vector",
+    "criteria": {
+     "commitment": "rfc3161",
+     "committed_at": "2026-10-20T15:38:25Z",
+     "id": "example-criteria",
+     "sha256": "4413e99d73d743d7b63a8362cf3d47ff646c9b64e3972b2fb6984093c8e9add7",
+     "version": "1"
+    },
+    "files": {
+     "original": {
+      "bytes": 22,
+      "name": "original.pdf",
+      "pages": 1,
+      "sha256": "4cbaf696bbf09c7f9c08d2fc5cb4e93235d0d9ff94a916b7dd90b91ef057e4be"
+     },
+     "remediated": {
+      "bytes": 23,
+      "name": "delivered.pdf",
+      "pages": 1,
+      "sha256": "b520ef4eb7a0f3e0d725ea92167e4962fe43584c7747b44e0acd4d846eaa4cf8"
+     }
+    },
+    "human_review": {
+     "scope": [
+      "Example review scope"
+     ],
+     "status": "pending"
+    },
+    "independence": "independent",
+    "issued_utc": "2026-10-20T15:39:00Z",
+    "issuer": "Example Checker",
+    "key_id": "spec-test-2f2dfa2f",
+    "notice": "Test vector. Not a real check.",
+    "parties": {
+     "checker": {
+      "key_id": "spec-test-2f2dfa2f",
+      "name": "Example Checker"
+     },
+     "producer": {
+      "key_id": null,
+      "name": "Example Vendor"
+     }
+    },
+    "receipt_id": "EX-0001",
+    "results": [
+     {
+      "finding": "Met.",
+      "id": "c1",
+      "required": true,
+      "result": "pass",
+      "title": "First required criterion"
+     },
+     {
+      "finding": "Met.",
+      "id": "c2",
+      "required": true,
+      "result": "pass",
+      "title": "Second required criterion"
+     },
+     {
+      "finding": "No review recorded.",
+      "id": "c3",
+      "required": false,
+      "result": "not-evaluated",
+      "title": "Optional criterion"
+     }
+    ],
+    "revision": 1,
+    "schema": "trilatic.acceptance-receipt/1.2",
+    "suite": {
+     "digest": "sha-256",
+     "signature": "Ed25519"
+    },
+    "tools": {
+     "profile": "example profile",
+     "validator": "example 1.0"
+    },
+    "verdict": "pass"
+   },
+   "signature": {
+    "alg": "Ed25519",
+    "key_id": "spec-test-2f2dfa2f",
+    "value": "06Q3s44f9YomqHl1gcgaqb7Xy249CWzsMMYPdLc8C3WoU/15RN1HlQz/om9m2TLhu7taMNOTqS6jksixk1hyAQ=="
+   },
+   "timestamp": {
+    "reason": "not requested",
+    "status": "none"
+   }
+  },
+  "receipt_tsr_base64": null,
+  "tsa_roots_base64": [
+   "MIIDHjCCAgagAwIBAgIESBNJTjANBgkqhkiG9w0BAQsFADAvMS0wKwYDVQQDDCRXQVIgVGVzdCBSb290IChub3QgYSByZWFsIGF1dGhvcml0eSkwHhcNMjAwMTAxMDAwMDAwWhcNNDAxMjMxMjM1OTU5WjAvMS0wKwYDVQQDDCRXQVIgVGVzdCBSb290IChub3QgYSByZWFsIGF1dGhvcml0eSkwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDmOpYavCsvv9aXmQ8fKnGYgVzKD9uJ6ntVhsYGmgSqAbiE8e8p+/p3DnjHhxkbOnwaF+csn3MRpXqh7K8CL9ish1i9t4Jz/79gT4cdEMk/gjjlpLlCPjHg38LXvouWAIqicp2Z6t8wR8XaOOpRqEHYCWQ5QpyecIWr7DbYDe94VO98HDqx5pmpTBXN32pRq41eiuDXQeZVXWLZAg8+PnRDDlUtq2IDau3GMAGGSFiHIbH4Z2vs8k8xy7UUX0IMXxRVyMBPE7a4jw53qzPX94KupEWX0cZoym/M3Ts63PerF81E9mnac2W5NqnMBJi2Pfm9f2rSkV8OtcjLGBo4wotNAgMBAAGjQjBAMA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEGMB0GA1UdDgQWBBQChJPbHrmVIcIIf806/Rkd7Nn1gDANBgkqhkiG9w0BAQsFAAOCAQEAW+Qa+Pz+Ijq5nijTJsCP6dbZYr6SLkwl5I0rSNnQoX4oz4YuKqJifgVeC5urO1UNKH/Dwjf1M4h0rvQ/WJf2Gapqg24WjwTSuuW3JtHmGRPUvglsPlQUVwx67pDY42iuB7tUaij2xu7geseFOjFlls8ieldeuqit1qs5/FjOqB3AH9/LLOFsUimPvzRuNeEamqAeQYRpQbAhzVMzdYBgzg/JS6R4OS5BUWmLSLEqGK8zwDespEwwZdGXthpMhmW1kilX44gX8FgKXXmUdZ+4DySKzY5W50nvuB4ECWNb0dIBlyQsUJ9s8TPtDRlNupg2fW0F1RYAUcYQcnqnU0o8nQ=="
+  ]
+ },
+ "license": "CC0-1.0",
+ "spec": "acceptance record, schema trilatic.acceptance-receipt/1.2",
+ "title": "41-tsa-ecdsa-p256-verified",
+ "vector": "41-tsa-ecdsa-p256-verified",
+ "warning": "Signed with a published TEST key. Never trust a record signed by it."
+}
