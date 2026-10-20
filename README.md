@@ -1,4 +1,4 @@
-# Work-acceptance record (draft profile 1.3, schema 1.2)
+# Work-acceptance record (draft profile 1.4, schema 1.2)
 
 A work-acceptance record is a checking party's signed findings about a delivered file, against criteria that were fixed before the check.
 It is distinct from a counterparty's acceptance decision (accepted / rejected / disputed). A counterparty acceptance can reference a
@@ -25,7 +25,7 @@ work-acceptance record by digest, so "the checker found X" and "the counterparty
 6. Check the record's timestamp token imprint (SHA-256, as in step 5) against SHA-256 of the canonical receipt; the unsigned `timestamp.digest_sha256` field is informative and never decides the outcome; report `receipt_timestamp` as `none` (no timestamp or no token supplied), `imprint_match` or `imprint_mismatch`. A mismatching token is never used as evidence of time.
 7. Recompute the verdict from the per-criterion results (property 4) and compare it with the stated verdict (`VERDICT_MISMATCH`).
 8. Emit problem codes (`SIGNATURE_INVALID`, `KEY_REJECTED`, `CHECKER_NOT_SIGNER`, `KEY_COLLISION`, `INDEPENDENCE_INCONSISTENT`, `RESULT_VOCABULARY`, `VERDICT_MISMATCH`, `CRITERIA_HASH_MISMATCH`, `CRITERIA_RESULTS_MISMATCH`, `CRITERIA_TIMESTAMP_MISMATCH`, `CRITERIA_TIME_MISMATCH`, `CRITERIA_COMMITTED_AFTER_CHECK`) and warning codes (`SELF_CHECKED`, `PRODUCER_UNDECLARED`, `CRITERIA_COMMITMENT_UNVERIFIED`). The record is accepted as stated when the signature is valid and there are no problem codes. Code lists are sets: compare without regard to order. `PRODUCER_UNDECLARED` follows the parties block (no producer named), whatever the record states; a stated `independence` that differs from the derived one is also `INDEPENDENCE_INCONSISTENT`. A record refused at step 1 has the outcome `{"refused": true, "reason": "unknown schema, canonicalization or suite"}`.
-9. Time-stamp authority. The outcome fields cover imprint and time only. A verifier that presents a time as evidence to a third party should also validate the token's CMS signature and certificate chain against authorities the relying party trusts, and report that separately.
+9. Time-stamp authority. The outcome fields cover imprint and time only. A verifier that presents a time as evidence to a third party should also validate the token's CMS signature and certificate chain against authorities the relying party trusts, and report that separately. **Profile 1.4:** the outcome may carry `tsa_signature`, an object with keys `criteria` and/or `receipt` (one per token present). Without relying-party anchors it is `not_evaluated`, and an absent field reads the same. With anchors it is `verified` (CMS signature, ESS signing-certificate binding, `id-kp-timeStamping`, validity at genTime, and a chain of CA issuers reaching a supplied anchor; a root inside the token is not an anchor), `failed`, `untrusted`, `unsupported` (e.g. RSASSA-PSS) or `no_signer`. It never changes any other outcome member.
 
 ## Vectors (`vectors/`, CC0)
 | file | case |
@@ -60,19 +60,26 @@ work-acceptance record by digest, so "the checker found X" and "the counterparty
 | 28-key-file-with-unrelated-bad-entry.json | an unrelated small-order entry listed before the valid signing key: same outcome as 01 (case from robertolocatelli81-dev) |
 | 29-criteria-token-accuracy-flips-commitment.json | the criteria token is 30 s before the check but states an accuracy of 60 s: `CRITERIA_COMMITTED_AFTER_CHECK` (case from robertolocatelli81-dev) |
 | 30-criteria-token-accuracy-millis-still-before.json | control for 29: the same times with an accuracy of 500 ms (the millis field): no problems |
+| 31-tsa-freetsa-verified.json | live FreeTSA tokens over the criteria and the record, FreeTSA root as anchor: `tsa_signature` both `verified` |
+| 32-tsa-digicert-verified.json | live DigiCert tokens, DigiCert Trusted Root G4 as anchor: both `verified` |
+| 33-tsa-unrelated-root-untrusted.json | 31's tokens with an unrelated anchor: both `untrusted` |
+| 34-tsa-tampered-signature-failed.json | 31 with one bit flipped in the criteria token's signature: criteria `failed`, receipt `verified` |
+| 35-tsa-token-without-signer-certificate.json | a live FreeTSA criteria token requested with certReq=false: criteria `no_signer` |
+| 36-tsa-no-anchors-not-evaluated.json | 31's tokens with no anchors: both `not_evaluated` (an omitted field reads the same) |
 
 Each file contains its inputs and an `expected` object with the outcome an independent verifier should reproduce. The keys in the vectors are test keys:
-never trust them. The timestamp tokens in the vectors are imprint-and-time fixtures, not valid RFC 3161 tokens: their SignedData has no SignerInfo, so OpenSSL and other CMS parsers that require a signer refuse them. They test imprint and time handling only.
+never trust them. The timestamp tokens in the vectors are imprint-and-time fixtures, not valid RFC 3161 tokens: their SignedData has no SignerInfo, so OpenSSL and other CMS parsers that require a signer refuse them. They test imprint and time handling only. Vectors 31-36 instead carry real RFC 3161 tokens (FreeTSA and DigiCert, fetched 2026-10-20) and relying-party anchors in `inputs.tsa_roots_base64`.
 
 ## Reference verifier (`verifier/`)
 
-`verifier/war_verify.py` runs the procedure above using only the Python standard library (Ed25519, JCS and the RFC 3161 scan are implemented in the file), with no network access:
+`verifier/war_verify.py` runs the procedure above using only the Python standard library (Ed25519, JCS, the RFC 3161 scan and the profile 1.4 authority-signature checks are implemented in the file), with no network access:
 
     python -I verifier/war_verify.py vectors/*.json
 
-It prints `AGREE` or `DIFF` per vector and exits non-zero on any disagreement; `--outcome FILE` prints the computed outcome object. It checks token imprints, times and accuracy, not the time-stamp authority's signature (step 9). It is offered as a reference for comparison; clean-room verifiers that disagree with it, or with a vector's `expected` object, are the useful result.
+It prints `AGREE` or `DIFF` per vector and exits non-zero on any disagreement; `--outcome FILE` prints the computed outcome object. It checks token imprints, times and accuracy; the authority signature (step 9) is evaluated when anchors are supplied, from a vector's `inputs.tsa_roots_base64` or `--tsa-roots FILE`. It is offered as a reference for comparison; clean-room verifiers that disagree with it, or with a vector's `expected` object, are the useful result.
 
 ## Changelog
+**Profile 1.4 (2026-10-20; schema identifier unchanged).** Adds the authority-signature outcome `tsa_signature` (step 9), additive and `not_evaluated` without anchors, so vectors 01-30 and existing verifiers are unchanged; vectors 31-36 from live FreeTSA (ECDSA P-384) and DigiCert (RSA) tokens. Untested in this release: RSASSA-PSS (reported `unsupported`) and ECDSA P-256 against live tokens.
 **Profile 1.3 (2026-10-18; schema identifier unchanged).** Resolves the questions from clean-room verifiers by Tetsurohhori and robertolocatelli81-dev and a second run by babyblueviper1 (x402-foundation/tsc#4): step 2 names the signed `receipt.key_id` and adds the canonical, prime-order key rule (`KEY_REJECTED`); step 5's reference time is the earlier of `issued_utc` and a covering token's genTime; imprints must be SHA-256 by OID; `accuracy` widens comparisons, `ordering` ignored; a token over other bytes falls back with `CRITERIA_COMMITMENT_UNVERIFIED`; `PRODUCER_UNDECLARED` follows the parties block; step 1 refusal shape; authority signature reported separately; vectors 12-27 added (12b replaces 12; Tetsurohhori's SHA-1 vector superseded by 23). Clarified 2026-10-18: the key rule applies to the named signing key only; vector 28 added; outcomes for 01-27 unchanged. Added 2026-10-19: vectors 29-30, the first whose tokens state an `accuracy`; the reference verifier in `verifier/`.
 **Profile 1.2.1 (2026-10-17; schema identifier unchanged).** Resolves ambiguities found by an independent clean-room review (babyblueviper1): `CRITERIA_COMMITTED_AFTER_CHECK` is a problem; the token over `criteria.sha256` is authoritative for commitment time (`CRITERIA_TIME_MISMATCH`, fallback with `CRITERIA_COMMITMENT_UNVERIFIED`); verdict rule completed (required `fail` wins, `VERDICT_MISMATCH`); reference time uses the record's token only when it covers the record; vectors 06-11 added.
 **Profile 1.2.** First draft, vectors 01-05.
