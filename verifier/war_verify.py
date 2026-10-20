@@ -462,6 +462,8 @@ MAX_DEPTH = 6
 
 OID_SIGNED_DATA = "1.2.840.113549.1.7.2"
 OID_MESSAGE_DIGEST = "1.2.840.113549.1.9.4"
+OID_CONTENT_TYPE = "1.2.840.113549.1.9.3"
+OID_TST_INFO = "1.2.840.113549.1.9.16.1.4"
 OID_RSA = "1.2.840.113549.1.1.1"
 OID_PSS = "1.2.840.113549.1.1.10"
 OID_EC = "1.2.840.10045.2.1"
@@ -845,8 +847,8 @@ def verify_sig(cert, sig_oid, digest_oid, signed, sig):
 
 
 # ---------------------------------------------------------------- chain ----
-def build_chain(signer, pool, roots):
-    """Return list of Certs signer..anchor; raises Failed / Untrusted."""
+def build_chain(signer, pool, roots, gen_dt):
+    """Return list of Certs signer..anchor; raises Failed / Untrusted. Each issuer that is not an anchor must be valid at gen_dt."""
     chain = [signer]
     cur = signer
     for _ in range(MAX_DEPTH):
@@ -881,6 +883,10 @@ def build_chain(signer, pool, roots):
             raise Failed(
                 "issuer certificate %r is not a CA (basicConstraints cA is not TRUE)"
                 % nxt.cn
+            )
+        if not anchor and not (nxt.not_before <= gen_dt <= nxt.not_after):
+            raise Failed(
+                "issuer certificate %r not valid at genTime %s" % (nxt.cn, iso(gen_dt))
             )
         chain.append(nxt)
         cur = nxt
@@ -976,6 +982,9 @@ def verify_tsa_signature(tsr, roots):
         encap = sd[2].children()
         if len(encap) < 2:
             raise ValueError("no eContent")
+        econtent_type = oid_str(encap[0])
+        if econtent_type != OID_TST_INFO:
+            raise Failed("eContentType %s is not id-ct-TSTInfo" % econtent_type)
         econtent = parse_one(encap[1].val).val  # [0] { OCTET STRING }
         certs_der, signer_infos = [], None
         for n in sd[3:]:
@@ -1014,11 +1023,18 @@ def verify_tsa_signature(tsr, roots):
         content_hash = hfn(econtent).digest()
 
         if attrs is not None:
-            md = None
+            md, ct = None, None
             for a in attrs.children():
                 ak = a.children()
                 if oid_str(ak[0]) == OID_MESSAGE_DIGEST:
                     md = parse_one(ak[1].children()[0].raw).val
+                elif oid_str(ak[0]) == OID_CONTENT_TYPE:
+                    ct = oid_str(ak[1].children()[0])
+            # RFC 5652 5.3: with signedAttrs present, content-type is required and must equal eContentType
+            if ct is None:
+                raise Failed("signedAttrs lack contentType")
+            if ct != econtent_type:
+                raise Failed("contentType attribute %s does not match eContentType" % ct)
             if md is None:
                 raise Failed("signedAttrs lack messageDigest")
             if md != content_hash:
@@ -1067,7 +1083,7 @@ def verify_tsa_signature(tsr, roots):
         if not (signer.not_before <= gen_dt <= signer.not_after):
             raise Failed("genTime %s outside signer certificate validity" % gen_iso)
 
-        chain = build_chain(signer, certs, roots_p)
+        chain = build_chain(signer, certs, roots_p, gen_dt)
         chain_names = [c.cn for c in chain]
         return _result(
             "verified",
