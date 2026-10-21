@@ -1038,6 +1038,21 @@ def _check_ess_binding(attrs, signer):
 
 def verify_tsa_signature(tsr, roots):
     signer_name, chain_names, gen_iso = None, [], None
+    # Precedence (profile 1.4): failed if any check that can run fails; else no_signer; else unsupported; else
+    # untrusted. no_signer and unsupported are deferred so the checks that can still run get their chance to fail.
+    pending = []
+
+    def defer(status, reason):
+        if not pending or (status == "no_signer" and pending[0][0] != "no_signer"):
+            pending[:] = [(status, reason)]
+
+    def try_run(f):
+        try:
+            return f()
+        except Unsupported as e:
+            defer("unsupported", str(e))
+            return None
+
     try:
         top = parse_one(tsr)
         ci = _find_content_info(top)
@@ -1082,12 +1097,15 @@ def verify_tsa_signature(tsr, roots):
         signature = si[idx + 1].val
 
         notes = ""
-        if digest_oid not in HASH_OIDS:
-            raise Unsupported("digest algorithm %s not supported" % digest_oid)
-        hname, hfn = HASH_OIDS[digest_oid]
-        if hname == "sha1":
-            notes = " (note: SHA-1 digest accepted, weak)"
-        content_hash = hfn(econtent).digest()
+        digest_ok = digest_oid in HASH_OIDS
+        content_hash = None
+        if not digest_ok:
+            defer("unsupported", "digest algorithm %s not supported" % digest_oid)
+        else:
+            hname, hfn = HASH_OIDS[digest_oid]
+            if hname == "sha1":
+                notes = " (note: SHA-1 digest accepted, weak)"
+            content_hash = hfn(econtent).digest()
 
         if attrs is not None:
             md, ct = None, None
@@ -1104,7 +1122,7 @@ def verify_tsa_signature(tsr, roots):
                 raise Failed("contentType attribute %s does not match eContentType" % ct)
             if md is None:
                 raise Failed("signedAttrs lack messageDigest")
-            if md != content_hash:
+            if digest_ok and md != content_hash:
                 raise Failed("messageDigest does not match hash of TSTInfo")
             signed = b"\x31" + attrs.raw[1:]
         else:
@@ -1135,23 +1153,30 @@ def verify_tsa_signature(tsr, roots):
                 signer = c
                 break
         if signer is None:
-            return _result(
-                "no_signer",
-                "signer certificate neither in the token nor supplied",
-                gen=gen_iso,
-            )
+            defer("no_signer", "signer certificate neither in the token nor supplied")
+            return _result(pending[0][0], pending[0][1], gen=gen_iso)
         signer_name = signer.cn
 
-        verify_sig(signer, sig_oid, digest_oid, signed, signature, sig_params)
-        _check_ess_binding(attrs, signer)
+        if digest_ok:
+            try_run(lambda: verify_sig(signer, sig_oid, digest_oid, signed, signature, sig_params))
+        try_run(lambda: _check_ess_binding(attrs, signer))
 
         if signer.eku is None or OID_TIMESTAMPING not in signer.eku:
             raise Failed("signer certificate lacks extKeyUsage id-kp-timeStamping")
         if not (signer.not_before <= gen_dt <= signer.not_after):
             raise Failed("genTime %s outside signer certificate validity" % gen_iso)
 
-        chain = build_chain(signer, certs, roots_p, gen_dt)
-        chain_names = [c.cn for c in chain]
+        untrusted = None
+        try:
+            chain = try_run(lambda: build_chain(signer, certs, roots_p, gen_dt))
+            if chain:
+                chain_names = [c.cn for c in chain]
+        except Untrusted as e:
+            untrusted = str(e)
+        if pending:
+            return _result(pending[0][0], pending[0][1], signer_name, chain_names, gen_iso)
+        if untrusted:
+            return _result("untrusted", untrusted, signer_name, chain_names, gen_iso)
         return _result(
             "verified",
             "signature, chain to provided root, EKU and validity OK" + notes,
@@ -1279,7 +1304,7 @@ def vector_outcome(vec, tsa_roots=None):
     roots = tsa_roots
     if roots is None and "tsa_roots_base64" in i:
         roots = [base64.b64decode(r) for r in i["tsa_roots_base64"]]
-    if roots is not None and tsa_tokens_present(i):
+    if roots and tsa_tokens_present(i):  # an empty anchor list is "without anchors": not evaluated
         out["tsa_signature"] = tsa_signature_outcome(i, roots)
     return out
 
