@@ -1,4 +1,4 @@
-"""Work-acceptance record verifier, profile 1.4 (schema trilatic.acceptance-receipt/1.2).
+"""Work-acceptance record verifier, profile 1.4.1 (schema trilatic.acceptance-receipt/1.2).
 
 Reference verifier using only the Python standard library. It implements Ed25519 (with the profile 1.3 key rule),
 JCS (RFC 8785), an RFC 3161 imprint, time and accuracy scan, and (profile 1.4) the RFC 3161 authority-signature
@@ -1313,11 +1313,18 @@ def _norm(o):
     return {k: sorted(x) if k.endswith("_codes") else x for k, x in o.items()}
 
 
-def normalize_tsa(got, exp, i):
-    """Absence of tsa_signature means not_evaluated for each token present (profile 1.4)."""
+def normalize_tsa(got, exp, i, accepted=None):
+    """Absence of tsa_signature means not_evaluated for each token present (profile 1.4). A vector's
+    tsa_signature_accepted lists, per token, other values that also conform; such a value reads as the expected one."""
     if "tsa_signature" in exp and "tsa_signature" not in got:
         got = dict(got)
         got["tsa_signature"] = {k: "not_evaluated" for k in tsa_tokens_present(i)}
+    if accepted and isinstance(got.get("tsa_signature"), dict):
+        ts = dict(got["tsa_signature"])
+        for k, ok in accepted.items():
+            if ts.get(k) in ok:
+                ts[k] = exp["tsa_signature"][k]
+        got = dict(got, tsa_signature=ts)
     return got
 
 
@@ -1345,7 +1352,7 @@ def main(argv):
     for f in argv:
         vec = json.load(open(f, encoding="utf-8"))
         exp = vec["expected"]
-        got = normalize_tsa(vector_outcome(vec, roots), exp, vec.get("inputs", {}))
+        got = normalize_tsa(vector_outcome(vec, roots), exp, vec.get("inputs", {}), vec.get("tsa_signature_accepted"))
         g = _norm({k: got.get(k) for k in exp})
         ok = g == _norm(exp)
         print(("AGREE " if ok else "DIFF  ") + f.replace("\\", "/").split("/")[-1])
