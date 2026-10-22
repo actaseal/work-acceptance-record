@@ -70,6 +70,38 @@ def body_of(doc):
     return doc["receipt"] if "receipt" in doc else doc
 
 
+_REQUIRED = (
+    "protocol",
+    "scheme",
+    "network",
+    "asset",
+    "payer",
+    "pay_to",
+    "amount",
+    "nonce",
+)
+
+
+def _in_form(p):
+    """The x402 exact form: exactly the required members plus optional settlement_tx, all strings; network is eip155:
+    and a decimal chain id without leading zeros (CAIP-2); amount a decimal string of atomic units; addresses 20 bytes,
+    nonce 32 bytes, settlement_tx 32 bytes, each 0x-prefixed hex."""
+    import re
+
+    if set(p) - {"settlement_tx"} != set(_REQUIRED) or not all(
+        isinstance(v, str) for v in p.values()
+    ):
+        return False
+    hexn = lambda v, n: re.fullmatch(r"0x[0-9a-fA-F]{%d}" % (2 * n), v) is not None
+    return (
+        re.fullmatch(r"eip155:[1-9][0-9]{0,31}", p["network"]) is not None
+        and re.fullmatch(r"0|[1-9][0-9]*", p["amount"]) is not None
+        and all(hexn(p[k], 20) for k in ("asset", "payer", "pay_to"))
+        and hexn(p["nonce"], 32)
+        and ("settlement_tx" not in p or hexn(p["settlement_tx"], 32))
+    )
+
+
 def check_payment(body, rpc):
     p = body.get("payment")
     if not isinstance(p, dict):
@@ -80,6 +112,11 @@ def check_payment(body, rpc):
         or not str(p.get("network", "")).startswith("eip155:")
     ):
         return {"status": "unsupported", "reason": "only x402 exact on eip155 networks"}
+    if not _in_form(p):
+        return {
+            "status": "unsupported",
+            "reason": "payment member outside the x402 exact form",
+        }
     asset, payer, pay_to = p["asset"].lower(), p["payer"].lower(), p["pay_to"].lower()
     nonce = "0x" + _word(p["nonce"])
     used = rpc(

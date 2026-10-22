@@ -759,14 +759,16 @@ OID_MGF1 = "1.2.840.113549.1.1.8"
 def pss_params(node):
     """RSASSA-PSS-params (RFC 8017 A.2.3) -> (hash_oid, salt_len). MGF1 with the same hash and trailerField 1 only."""
     h, mgf_h, salt, trailer = "1.3.14.3.2.26", "1.3.14.3.2.26", 20, 1  # ASN.1 defaults
-    for f in (node.children() if node is not None and node.tag == 0x30 else []):
+    for f in node.children() if node is not None and node.tag == 0x30 else []:
         inner = parse_one(f.val)
         if f.tag == 0xA0:
             h = oid_str(inner.children()[0])
         elif f.tag == 0xA1:
             k = inner.children()
             if oid_str(k[0]) != OID_MGF1:
-                raise Unsupported("RSASSA-PSS mask generation %s not supported" % oid_str(k[0]))
+                raise Unsupported(
+                    "RSASSA-PSS mask generation %s not supported" % oid_str(k[0])
+                )
             mgf_h = oid_str(k[1].children()[0])
         elif f.tag == 0xA2:
             salt = uint_val(inner)
@@ -775,7 +777,9 @@ def pss_params(node):
     if h not in HASH_OIDS:
         raise Unsupported("hash algorithm %s not supported" % h)
     if mgf_h != h:
-        raise Unsupported("RSASSA-PSS with an MGF1 hash different from the message hash")
+        raise Unsupported(
+            "RSASSA-PSS with an MGF1 hash different from the message hash"
+        )
     if trailer != 1:
         raise Unsupported("RSASSA-PSS trailerField %d" % trailer)
     return h, salt
@@ -784,7 +788,10 @@ def pss_params(node):
 def rsa_pss_verify(cert, hash_oid, salt_len, signed, sig):
     """EMSA-PSS-VERIFY (RFC 8017 9.1.2) with MGF1 over the same hash."""
     if cert.rsa is None:
-        raise Failed("issuer/signer key type %s does not match an RSA signature algorithm" % cert.key_oid)
+        raise Failed(
+            "issuer/signer key type %s does not match an RSA signature algorithm"
+            % cert.key_oid
+        )
     n, e = cert.rsa
     k = (n.bit_length() + 7) // 8
     if len(sig) != k:
@@ -959,12 +966,21 @@ def build_chain(signer, pool, roots, gen_dt):
         nxt = None
         for cand in cands:
             try:
-                verify_sig(cand, cur.sigalg_oid, None, cur.tbs_raw, cur.sig, cur.sigalg_params)
+                verify_sig(
+                    cand, cur.sigalg_oid, None, cur.tbs_raw, cur.sig, cur.sigalg_params
+                )
                 nxt = cand
                 break
             except Failed as e:
                 last_err = e
         if nxt is None:
+            # An anchor with the issuer's name but another key is not that issuer (anchors match by name and key): if
+            # only anchors failed, no chain reaches a supplied anchor. A certificate carried in the token that fails is
+            # a broken chain.
+            if all(any(c.der == r.der for r in roots) for c in cands):
+                raise Untrusted(
+                    "no supplied anchor with the name and key that issued %r" % cur.cn
+                )
             raise Failed("certificate %r: %s" % (cur.cn, last_err))
         # An issuer must be a CA, unless it is a provided trust anchor (anchors are trusted by configuration).
         # Without this, any end-entity certificate under a trusted root could vouch for a forged signer.
@@ -1146,7 +1162,9 @@ def verify_tsa_signature(tsr, roots):
             if ct is None:
                 raise Failed("signedAttrs lack contentType")
             if ct != econtent_type:
-                raise Failed("contentType attribute %s does not match eContentType" % ct)
+                raise Failed(
+                    "contentType attribute %s does not match eContentType" % ct
+                )
             if md is None:
                 raise Failed("signedAttrs lack messageDigest")
             if digest_ok and md != content_hash:
@@ -1185,7 +1203,11 @@ def verify_tsa_signature(tsr, roots):
         signer_name = signer.cn
 
         if digest_ok:
-            try_run(lambda: verify_sig(signer, sig_oid, digest_oid, signed, signature, sig_params))
+            try_run(
+                lambda: verify_sig(
+                    signer, sig_oid, digest_oid, signed, signature, sig_params
+                )
+            )
         try_run(lambda: _check_ess_binding(attrs, signer))
 
         if signer.eku is None or OID_TIMESTAMPING not in signer.eku:
@@ -1201,7 +1223,9 @@ def verify_tsa_signature(tsr, roots):
         except Untrusted as e:
             untrusted = str(e)
         if pending:
-            return _result(pending[0][0], pending[0][1], signer_name, chain_names, gen_iso)
+            return _result(
+                pending[0][0], pending[0][1], signer_name, chain_names, gen_iso
+            )
         if untrusted:
             return _result("untrusted", untrusted, signer_name, chain_names, gen_iso)
         return _result(
