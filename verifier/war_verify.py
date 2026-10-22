@@ -1,8 +1,8 @@
 """Work-acceptance record verifier, profile 1.4.1 (schema trilatic.acceptance-receipt/1.2).
 
 Reference verifier using only the Python standard library. It implements Ed25519 (with the profile 1.3 key rule),
-JCS (RFC 8785), an RFC 3161 imprint, time and accuracy scan, and (profile 1.4) the RFC 3161 authority-signature
-checks, embedded below. No network, no dependencies.
+JCS (RFC 8785), the RFC 3161 imprint, time and accuracy read from the token's signed TSTInfo, and (profile 1.4)
+the RFC 3161 authority-signature checks, embedded below. No network, no dependencies.
 Usage:  python war_verify.py VECTOR.json [VECTOR.json ...]   -> prints AGREE/DIFF per vector, exit 1 on any DIFF
         python war_verify.py --outcome VECTOR.json           -> prints the computed outcome as JSON
         python war_verify.py --tsa-roots ROOTS.pem [--tsa-roots ...] ...  -> also evaluate TSA signatures against these
