@@ -108,17 +108,40 @@ def key_is_canonical_prime_order(pub):
 
 # ---------------------------------------------------------------- canonical JSON
 def _num(v):
+    """ECMAScript Number::toString (RFC 8785 section 3.2.2.3). JSON numbers are IEEE doubles, so an integer beyond
+    2**53 is formatted as the double it parses to, as a JavaScript verifier sees it."""
     if isinstance(v, bool):
         raise ValueError("bool")
-    if isinstance(v, float):
-        if v != v or v in (float("inf"), float("-inf")):
-            raise ValueError("NaN and Infinity are not valid JSON numbers")
-        if v.is_integer() and abs(v) < 1e21:
-            return str(int(v))
-        return repr(
-            v
-        )  # ES6 and repr agree for the shortest round-trip form in the common range
-    return str(v)
+    if isinstance(v, int) and abs(v) <= 2**53:
+        return str(v)
+    f = float(v)
+    if f != f or f in (float("inf"), float("-inf")):
+        raise ValueError("NaN and Infinity are not valid JSON numbers")
+    if f == 0:
+        return "0"
+    sign = "-" if f < 0 else ""
+    mant, _, exp = repr(abs(f)).partition(
+        "e"
+    )  # repr is the shortest round-trip digit string, as in ECMAScript
+    ip, _, fp = mant.partition(".")
+    digits = ip + fp
+    n = len(ip) + (int(exp) if exp else 0)
+    lead = len(digits) - len(digits.lstrip("0"))
+    digits = digits.lstrip("0")
+    n -= lead
+    digits = digits.rstrip("0") or "0"
+    k = len(digits)
+    if k <= n <= 21:
+        out = digits + "0" * (n - k)
+    elif 0 < n <= 21:
+        out = digits[:n] + "." + digits[n:]
+    elif -6 < n <= 0:
+        out = "0." + "0" * (-n) + digits
+    else:
+        e = n - 1
+        es = ("+" if e >= 0 else "-") + str(abs(e))
+        out = digits + "e" + es if k == 1 else digits[0] + "." + digits[1:] + "e" + es
+    return sign + out
 
 
 def jcs(v):
@@ -193,18 +216,7 @@ def canonical_for(body):
     raise ValueError("Unsupported receipt version: " + str(schema)[:60])
 
 
-# ---------------------------------------------------------------- RFC 3161 imprint scan
-SHA256_OID = bytes([0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01])
-
-
-def _imprint_is_sha256(tsr, at):
-    if at < 2 or tsr[at - 2] != 0x04 or tsr[at - 1] != 0x20:
-        return False
-    end = at - 2
-    if end >= 2 and tsr[end - 2] == 0x05 and tsr[end - 1] == 0x00:
-        end -= 2
-    return end >= len(SHA256_OID) and tsr[end - len(SHA256_OID) : end] == SHA256_OID
-
+# ---------------------------------------------------------------- RFC 3161 imprint and time (signed TSTInfo)
 
 def _accuracy_at(tsr, i):
     if i + 1 >= len(tsr) or tsr[i] != 0x30:
@@ -234,17 +246,32 @@ def _iso_from_gen(g):
 
 
 def tsr_time_for(tsr, digest):
-    at = tsr.find(digest)
-    if at < 0 or not _imprint_is_sha256(tsr, at):
-        return {"imprint": False, "time": None, "accuracy_ms": None}
-    for i in range(at + len(digest), len(tsr) - 16):
-        if tsr[i] == 0x18 and tsr[i + 1] == 0x0F:
-            return {
-                "imprint": True,
-                "time": _iso_from_gen(tsr[i + 2 : i + 17].decode("ascii", "replace")),
-                "accuracy_ms": _accuracy_at(tsr, i + 17),
-            }
-    return {"imprint": True, "time": None, "accuracy_ms": None}
+    """Imprint, genTime and accuracy read from the token's signed TSTInfo (RFC 3161 2.4.2), never from other bytes:
+    TimeStampResp or ContentInfo -> SignedData -> encapContentInfo (id-ct-TSTInfo) -> TSTInfo. Anything else in the
+    response, such as PKIStatusInfo.statusString, is unsigned and is not read."""
+    no = {"imprint": False, "time": None, "accuracy_ms": None}
+    try:
+        T = _tsa_module()
+        ci = T._find_content_info(T.parse_one(tsr)).children()
+        if T.oid_str(ci[0]) != "1.2.840.113549.1.7.2":
+            return no
+        encap = T.parse_one(ci[1].val).children()[2].children()
+        if T.oid_str(encap[0]) != "1.2.840.113549.1.9.16.1.4":
+            return no
+        tst = T.parse_one(T.parse_one(encap[1].val).val).children()
+        imprint = tst[2].children()
+        if T.oid_str(imprint[0].children()[0]) != "2.16.840.1.101.3.4.2.1":
+            return no  # the imprint must be SHA-256 by OID; same-length digests under other algorithms do not match
+        if imprint[1].tag != 0x04 or imprint[1].val != digest or tst[4].tag != 0x18:
+            return no
+        acc = tst[5].raw if len(tst) > 5 and tst[5].tag == 0x30 else None
+        return {
+            "imprint": True,
+            "time": _iso_from_gen(tst[4].val.decode("ascii", "replace")),
+            "accuracy_ms": _accuracy_at(acc, 0) if acc else None,
+        }
+    except (ValueError, IndexError, KeyError, AttributeError):
+        return no
 
 
 def _ms(iso):
@@ -1259,7 +1286,11 @@ def tsa_tokens_present(i):
     present = {}
     if i.get("criteria_tsr_base64"):
         present["criteria"] = base64.b64decode(i["criteria_tsr_base64"])
-    env_ts = (i["receipt"].get("timestamp") or {}) if isinstance(i.get("receipt"), dict) else {}
+    env_ts = (
+        (i["receipt"].get("timestamp") or {})
+        if isinstance(i.get("receipt"), dict)
+        else {}
+    )
     if env_ts.get("status") == "granted" and i.get("receipt_tsr_base64"):
         present["receipt"] = base64.b64decode(i["receipt_tsr_base64"])
     return present
@@ -1268,7 +1299,10 @@ def tsa_tokens_present(i):
 def tsa_signature_outcome(i, roots):
     """Profile 1.4 outcome field. roots: list of DER certificates (relying-party trust anchors)."""
     tv = _tsa_module()
-    return {k: tv.verify_tsa_signature(tok, roots)["status"] for k, tok in tsa_tokens_present(i).items()}
+    return {
+        k: tv.verify_tsa_signature(tok, roots)["status"]
+        for k, tok in tsa_tokens_present(i).items()
+    }
 
 
 def vector_outcome(vec, tsa_roots=None):
@@ -1304,7 +1338,9 @@ def vector_outcome(vec, tsa_roots=None):
     roots = tsa_roots
     if roots is None and "tsa_roots_base64" in i:
         roots = [base64.b64decode(r) for r in i["tsa_roots_base64"]]
-    if roots and tsa_tokens_present(i):  # an empty anchor list is "without anchors": not evaluated
+    if roots and tsa_tokens_present(
+        i
+    ):  # an empty anchor list is "without anchors": not evaluated
         out["tsa_signature"] = tsa_signature_outcome(i, roots)
     return out
 
@@ -1352,7 +1388,12 @@ def main(argv):
     for f in argv:
         vec = json.load(open(f, encoding="utf-8"))
         exp = vec["expected"]
-        got = normalize_tsa(vector_outcome(vec, roots), exp, vec.get("inputs", {}), vec.get("tsa_signature_accepted"))
+        got = normalize_tsa(
+            vector_outcome(vec, roots),
+            exp,
+            vec.get("inputs", {}),
+            vec.get("tsa_signature_accepted"),
+        )
         g = _norm({k: got.get(k) for k in exp})
         ok = g == _norm(exp)
         print(("AGREE " if ok else "DIFF  ") + f.replace("\\", "/").split("/")[-1])
