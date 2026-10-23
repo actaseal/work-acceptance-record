@@ -1,6 +1,6 @@
 {
  "contributed_by": "Trilatic (CC0)",
- "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; see verifier-py/tools/make_synthetic_tsa.py), with the test root as the only anchor. No record token. Vector 37's token, but the only anchor is root B, which has root A's subject name and another key. Anchors match by name and key, so root B is not the issuer and no chain reaches a supplied anchor: untrusted, not failed (the token's own certificates are intact).",
+ "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; provenance on the spec site), with the test root as the only anchor. No record token. Vector 37's token, but the only anchor is root B, which has root A's subject name and another key. Anchors match by name and key, so root B is not the issuer and no chain reaches a supplied anchor: untrusted, not failed (the token's own certificates are intact).",
  "expected": {
   "criteria_committed_before_check": "yes",
   "criteria_hash": "match",

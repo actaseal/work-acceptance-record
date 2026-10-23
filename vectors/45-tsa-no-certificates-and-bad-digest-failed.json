@@ -1,6 +1,6 @@
 {
  "contributed_by": "Trilatic (CC0)",
- "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; see verifier-py/tools/make_synthetic_tsa.py), with the test root as the only anchor. No record token. A token requested with certReq=false (no signer certificate, as 35) whose messageDigest attribute does not match the TSTInfo. A check that can run has failed, so the value is failed, not no_signer.",
+ "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; provenance on the spec site), with the test root as the only anchor. No record token. A token requested with certReq=false (no signer certificate, as 35) whose messageDigest attribute does not match the TSTInfo. A check that can run has failed, so the value is failed, not no_signer.",
  "expected": {
   "criteria_committed_before_check": "yes",
   "criteria_hash": "match",

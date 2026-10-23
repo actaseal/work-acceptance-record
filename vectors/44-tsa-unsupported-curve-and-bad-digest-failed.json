@@ -1,6 +1,6 @@
 {
  "contributed_by": "Trilatic (CC0)",
- "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; see verifier-py/tools/make_synthetic_tsa.py), with the test root as the only anchor. No record token. A P-521 token (unsupported, as 42) whose messageDigest attribute does not match the TSTInfo. A check that can run has failed, so the value is failed, not unsupported.",
+ "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; provenance on the spec site), with the test root as the only anchor. No record token. A P-521 token (unsupported, as 42) whose messageDigest attribute does not match the TSTInfo. A check that can run has failed, so the value is failed, not unsupported.",
  "expected": {
   "criteria_committed_before_check": "yes",
   "criteria_hash": "match",

@@ -1,6 +1,6 @@
 {
  "contributed_by": "Trilatic (CC0)",
- "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; see verifier-py/tools/make_synthetic_tsa.py), with the test root as the only anchor. No record token. Vector 38's token (intermediate expired before genTime) with an unrelated anchor (DigiCert Trusted Root G4), so the chain reaches no supplied anchor. The intermediate's validity check can run and fails, and a check that can run and fails decides first: failed, not untrusted.",
+ "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; provenance on the spec site), with the test root as the only anchor. No record token. Vector 38's token (intermediate expired before genTime) with an unrelated anchor (DigiCert Trusted Root G4), so the chain reaches no supplied anchor. The intermediate's validity check can run and fails, and a check that can run and fails decides first: failed, not untrusted.",
  "expected": {
   "criteria_committed_before_check": "yes",
   "criteria_hash": "match",

@@ -1,6 +1,6 @@
 {
  "contributed_by": "Trilatic (CC0)",
- "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; see verifier-py/tools/make_synthetic_tsa.py), with the test root as the only anchor. No record token. The intermediate CA's validity ended (2025-01-01) before genTime; the TSA certificate itself is valid at genTime. Every certificate in the chain other than the anchor must be valid at genTime.",
+ "description": "A synthetic criteria token from a test-only PKI (root, intermediate, TSA; provenance on the spec site), with the test root as the only anchor. No record token. The intermediate CA's validity ended (2025-01-01) before genTime; the TSA certificate itself is valid at genTime. Every certificate in the chain other than the anchor must be valid at genTime.",
  "expected": {
   "criteria_committed_before_check": "yes",
   "criteria_hash": "match",
