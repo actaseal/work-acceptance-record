@@ -87,6 +87,10 @@ work-acceptance record by digest, so "the checker found X" and "the counterparty
 | 55-receipt-payment-outside-the-form.json | as 47, with `payment.amount` a JSON number and an extra member: no problems, the same outcome as without it |
 | 56-third-party-checker-live-receipt.json | a live receipt issued by another checker under its own key (a self-test, not a real job), kept as received: no problems (contributed by babyblueviper1, CC0) |
 | 57-receipt-integer-valued-doubles.json | a passing receipt whose signed body holds 1.0, 100.0, -0.0 and 300.0, which RFC 8785 writes as 1, 100, 0 and 300 |
+| 60-receipt-exponent-numbers.json | a passing receipt whose signed body holds 1.5e-7, 1.25e+22, 1.234e-10, 9.87654321e-8 and 2.5e+21: RFC 8785 exponent form with more than one significant digit (contributed by actaseal, CC0) |
+| 61-receipt-key-outside-bmp.json | a passing receipt whose signed body has the keys `z`, U+1F600 and U+FF61: RFC 8785 sorts by UTF-16 code unit, so U+1F600 comes before U+FF61 (contributed by actaseal, CC0) |
+| 62-envelope-key-id-differs-from-signed.json | signed with key A, signed `receipt.key_id` names A, the envelope `signature.key_id` names B, also in the key file: `SIGNATURE_INVALID` (contributed by actaseal, CC0) |
+| 63-same-key-under-two-ids.json | as 05, but the producer names a second id that holds the checker's public key: `KEY_COLLISION`, `SELF_CHECKED` (contributed by actaseal, CC0) |
 
 Each file contains its inputs and an `expected` object with the outcome an independent verifier should reproduce. The keys in the vectors are test keys:
 never trust them. The timestamp tokens in the vectors are imprint-and-time fixtures, not valid RFC 3161 tokens: their SignedData has no SignerInfo, so OpenSSL and other CMS parsers that require a signer refuse them. They test imprint and time handling only. Vectors 31-36 instead carry real RFC 3161 tokens (FreeTSA and DigiCert, fetched 2026-10-20), and 37-46 (except 43) tokens from a test-only PKI (openssl 3.5, re-signed at a fixed genTime; the test root is not a real authority), and relying-party anchors in `inputs.tsa_roots_base64`.
@@ -117,6 +121,7 @@ implementer's own run file at a fixed commit; the result and the disclosure are 
 |---|---|---|---|---|---|
 | Tetsurohhori | Python, `cryptography` | 01-57 at `bc5a138` | 57/57 | [ADDENDUM-bc5a138.md](https://github.com/aos-standard/catalog/blob/dda8b4f/docs/runs/work-acceptance-record-cold/ADDENDUM-bc5a138.md) | written from the text; reference verifiers not opened; `expected` objects visible while the inputs were read |
 | babyblueviper1 | Python, `cryptography` | 01-55 at `6b2f730` | 55/55 | [upstream_vectors_1_4_1_55_run.txt](https://github.com/babyblueviper1/preaction-governance-conformance/blob/bc5c21d/examples/work-acceptance-record-cold/upstream_vectors_1_4_1_55_run.txt) | written from the text; reference not opened; `expected` objects visible while the inputs were read |
+| actaseal | Python, standard library only | 01-57 at `bc5a138` | 57/57 | [RESULT.md](https://github.com/actaseal/x402-acceptance-check-cold/blob/34b4f1d/work-acceptance-1.4.1/RESULT.md) | written from the text and vectors at `bc5a138`; reference verifier and other checkers not opened; `expected` objects visible while the inputs were read |
 | robertolocatelli81-dev | Python | 01-47 at `06d3b94` | 47/47 (441/441 fields) | [results/score_default.txt](https://github.com/robertolocatelli81-dev/work-acceptance-check-omega/blob/56233ab/results/score_default.txt) | written from the text; reference verifiers not opened |
 | reference (this repository) | Python standard library; JavaScript (WebCrypto) on the spec page | 01-57 at `bc5a138` | 57/57 | `python -I verifier/war_verify.py vectors/*.json` | written with the vectors |
 
